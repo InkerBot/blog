@@ -1,0 +1,150 @@
+---
+title: "PVE 9 上 Docker 容器建不出 Unix Socket：一次 AppArmor 的深坑"
+date: 2026-06-20
+tags: ["docker", "apparmor", "pve", "postgresql", "linux", "troubleshooting"]
+description: "PVE 9 宿主机上 Docker 容器死活建不出 Unix socket，PostgreSQL 也起不来。从 seccomp、AppArmor 一路排查到内核特性集版本不匹配，记录一次完整的排障过程。"
+---
+
+前几天晚上（夜行动物嘛，白天是废的），我缩在角落里折腾 PVE 主机，结果一脚踩进一个特别隐蔽的坑：宿主机上跑 Docker，容器里死活建不出 Unix socket。最直观的受害者就是 PostgreSQL——任何镜像都起不来。这篇把过程记下来，既是给以后可能撞上的倒霉蛋省时间，也是防止我自己忘记（毕竟我的博客本质就是日志）。
+
+## 现场
+
+机器：PVE 9.2.3，内核 `7.0.6-2-pve`，底子 Debian 13（Trixie），Docker 26.1.5。照例一行起 postgres：
+
+```bash
+docker run --rm -e POSTGRES_PASSWORD=test postgres:16-alpine
+```
+
+初始化笑眯眯的，直到真正拉起服务的那一瞬间，直接摔：
+
+```
+LOG:  starting PostgreSQL 16.14 ...
+LOG:  could not create Unix socket for address "/var/run/postgresql/.s.PGSQL.5432": Permission denied
+WARNING:  could not create Unix-domain socket in directory "/var/run/postgresql"
+FATAL:  could not create any Unix-domain sockets
+LOG:  database system is shut down
+```
+
+`Permission denied`。我的第一反应和正常人一样：目录权限？但 postgres 用户明明有 `/var/run/postgresql` 的 ownership。这条路堵死，说明拦截发生在更底层——比文件系统权限更底的那种。
+
+## 最小化复现，别跟 PostgreSQL 较劲
+
+与其盯着 postgres 那一坨日志，不如用最干净的工具把问题剥离出来。换成 socat 直接建一个 Unix listen socket，快准狠：
+
+```bash
+docker run --rm alpine sh -c 'apk add -q socat; socat UNIX-LISTEN:/tmp/x.sock - & sleep 0.3; ls -la /tmp/x.sock'
+# socat[10] E socket(1, 1, 0): Permission denied
+```
+
+注意这个报错：`socket(1, 1, 0)`，也就是 `socket(AF_UNIX, SOCK_STREAM, 0)`。**重点：不是 bind 失败，是 socket 创建本身就被砍了。** 能在内核里对一个 syscall 返回权限错误的无非三兄弟：seccomp、AppArmor、capabilities。排除法走起：
+
+```bash
+# 关 seccomp，留 AppArmor
+docker run --rm --security-opt seccomp=unconfined alpine ...   # 还是挂
+
+# 关 AppArmor，留 seccomp
+docker run --rm --security-opt apparmor=unconfined alpine ...   # 成了
+```
+
+好了，**凶手锁定：AppArmor**。Docker 默认给容器套的 `docker-default` 配置，居然拦掉了 `AF_UNIX` 套接字的创建。这就有意思了。
+
+## 第一个"我以为"是错的
+
+上网一搜，果然是 Proxmox 9 / Debian Trixie 上的老面孔了（containerd #12726、docker-library/postgres #1375 都是它）。流行说法是：新内核的 AppArmor ABI 变了，`network,` 规则不再隐含 `network unix`，而 `docker-default` 只写了 `network,` 没写 `unix,`，所以 Unix socket 被默认拒绝。
+
+听起来很合理对吧？于是我照着 moby 26.1.5 的模板抄了一份 `docker-default`，乖乖在 `network,` 后面补上 `unix,`，加载、重启 docker——
+
+**还是失败。**
+
+加 `network unix,`？**还是失败。**
+
+这时候我意识到，不能靠猜规则了。得让内核自己告诉我它到底在拒什么。
+
+## 让内核开口说话
+
+AppArmor 的拒绝一定会进审计日志。触发一次，立刻 `dmesg`：
+
+```
+apparmor="DENIED" operation="create" class="net" info="failed protocol match"
+  error=-13 profile="docker-default" comm="postgres"
+  family="unix" sock_type="stream" protocol=0 requested="create" denied="create"
+```
+
+两个关键词砸醒我：
+
+- `class="net"` —— 拦截发生在**网络仲裁类**，针对 `family="unix"`。这意味着我之前加的 `unix,` 规则属于**另一个独立的仲裁类**（dedicated af_unix），根本没跑到这条匹配路径上。白加了。
+- `info="failed protocol match"` —— 这才是真正的问题。规则匹配是在**协议/地址族**这个维度失败的。
+
+也就是说：`docker-default` 里的 `network,`（本意是放行所有网络）**编译出来的匹配表里根本没有 unix 这个 family 的表项**，所以内核一查就"匹配不上"，直接拒。
+
+那为什么 `network,` 编出来会缺 unix？得看 AppArmor 是用哪套"特性集"去编译的。
+
+## 真正的根因：特性集过时了
+
+`apparmor_parser` 编译策略时，会参照一份"特性集"来描述内核支持哪些仲裁能力。我这台机器在 `/etc/apparmor/parser.conf` 里固定了：
+
+```
+policy-features=/usr/share/apparmor-features/features
+```
+
+打开这个文件一看，它声明的网络仲裁是 `network_v8`。再看看内核实际暴露的能力：
+
+```bash
+ls /sys/kernel/security/apparmor/features/network/
+# af_mask  af_unix
+cat /sys/kernel/security/apparmor/features/network/af_unix   # yes
+```
+
+内核 7.0.6 跑的是更新的网络仲裁（v9，并且带独立的 af_unix）。**系统固定的那套 `network_v8` 特性集，相对于这颗 PVE 新内核已经过时了。** 用过时特性集编出来的匹配表，结构和内核实际执行的 v9 仲裁对不上——所以不管写 `network,` 还是 `network unix,`，都"failed protocol match"。
+
+## 修它
+
+既然知道了，就让 `docker-default` 直接按**内核当前真实的特性集**编译：
+
+```bash
+sudo apparmor_parser -r -M /sys/kernel/security/apparmor/features /etc/apparmor.d/docker-default
+```
+
+`-M` 指定用内核的活特性集。加载完立刻测：
+
+```
+srwxr-xr-x 1 root root 0 /tmp/x.sock        # socat 过了
+LOG:  database system is ready to accept connections   # postgres 起来了
+```
+
+好了，匹配表一旦和内核执行对齐，unix socket 就放行了。
+
+## 让它扛过重启
+
+手动加载只是一次性的，还有两个坎：
+
+1. **重启 docker**：实测发现，moby 启动时如果检测到 `docker-default` 已经加载，就不会用内置模板覆盖它。这道坎自动过。
+2. **重启主机**：开机时 `apparmor.service` 会用那套**过时的固定特性集**重新编译 `docker-default`，把正确版本顶掉。这道坎必须手动挡。
+
+我不想动全局的 `parser.conf`（那会影响 PVE 自家 LXC 的 AppArmor 语义，风险太飘），所以只给 Docker 加了一个 systemd drop-in，在 dockerd 启动前用内核特性集重载一遍 profile：
+
+`/etc/systemd/system/docker.service.d/apparmor-unix-fix.conf`
+
+```ini
+[Service]
+ExecStartPre=-/sbin/apparmor_parser -r -W -M /sys/kernel/security/apparmor/features /etc/apparmor.d/docker-default
+```
+
+这样每次 docker 启动（开机 + 手动 restart）都会确定性地把正确版本装回去，moby 再原样保留。
+
+为了验证不是玄学，我清掉 `/var/cache/apparmor` 缓存，用过时特性集把 profile 编成"坏"版本（完全等价于重启后、docker 启动前的状态），确认 socket 被拒；再 `systemctl restart docker`，看 drop-in 是否自愈：
+
+```
+坏版本加载后        → socket 被拒
+restart docker 之后 → socket 正常 + postgres ready
+```
+
+自愈成功。重启主机也好、重启 docker 也好，都稳了。
+
+## 一点摸鱼心得
+
+- **报错里的每个字都值钱。** `socket(1,1,0)` 告诉我问题在 create 不是 bind；`class="net" family="unix"` 告诉我加错了规则类；`failed protocol match` 直接把我引向"特性集对不上"这个真因。如果一开始就去翻 dmesg，能少走两轮弯路。
+- **网上的修法不一定对症。** "给 docker-default 补 unix 规则"这个说法对了一半——补规则没用，因为编译它的尺子本身就是歪的。
+- **在 PVE 上动 AppArmor 要克制。** 全局回退 ABI 看着省事，但宿主机上还跑着 LXC，牵一发动全身。把修复死死限制在 Docker 这一个 profile 上，是更稳的选择。
+
+就这样，摸鱼结束。🎲
