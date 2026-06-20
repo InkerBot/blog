@@ -1,0 +1,12 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostList from '../../components/PostList.astro';
+import { getSortedPosts } from '../../utils/posts.ts';
+
+const posts = await getSortedPosts();
+---
+
+<BaseLayout title="所有文章">
+  <p class="section-label">所有文章 · {posts.length} 篇</p>
+  <PostList posts={posts} />
+</BaseLayout>

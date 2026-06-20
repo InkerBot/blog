@@ -1,0 +1,30 @@
+---
+title: "InkLogs API 文档"
+date: 2022-12-17
+description: "PUT https://log.inker.bot/api/v1/logs"
+tags: ["ink-log", "api 文档"]
+---
+
+### 上传日志
+
+`PUT https://log.inker.bot/api/v1/logs`
+
+- 日志内容作为 content 上传
+- GET参数：`email`：可选，邮件密钥
+- 返回：日志 id
+
+```sh
+curl --upload-file latest.log https://log.inker.bot/api/v1/logs
+```
+
+### 下载日志
+
+`GET https://log.inker.bot/api/v1/logs/:id`
+
+- GET参数：`file-name`：可选，下载的文件名
+- GET参数：`content-type`：可选，返回的文件类型
+- 返回：日志内容
+
+```sh
+curl https://log.inker.bot/api/v1/logs/e9e17f30cd914e15a3ad68b5dcb07c1d
+```

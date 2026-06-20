@@ -1,0 +1,70 @@
+---
+title: "Java MethodHandles with vararg 的一个坑"
+date: 2024-05-10
+description: "在下面这个例子中，我们使用 MethodHandles 来调用一个方法，这个方法的参数带有 vararg。"
+tags: ["jvm"]
+---
+
+在下面这个例子中，我们使用 `MethodHandles` 来调用一个方法，这个方法的参数带有 `vararg`。
+
+```java
+public static void test(String title, String ... args) {
+  for (int i = 0; i < args.length; i++) {
+    System.out.println(title + " " + i + ": " + args[i]);
+  }
+}
+```
+
+## 使用 `invoke`
+
+如果我们使用 `invoke`，那么两种方式都可以
+
+```java
+MethodHandles.lookup()
+    .findStatic(Top.class, "test", MethodType.methodType(void.class, String.class, String[].class))
+    .invoke("arg", new String[]{"a", "b", "c"});
+```
+
+```java
+MethodHandles.lookup()
+    .findStatic(Top.class, "test", MethodType.methodType(void.class, String.class, String[].class))
+    .invoke("arg", "a", "b", "c");
+```
+
+## 使用 `invokeExact`
+
+如果我们用 `invokeExact`，下面这个例子可以正常运行。
+
+```java
+MethodHandles.lookup()
+    .findStatic(Top.class, "test", MethodType.methodType(void.class, String.class, String[].class))
+    .invokeExact("arg", new String[]{"a", "b", "c"});
+```
+
+但是如果我们不合并 `vararg`，而是直接传入多个参数，就会出现问题。
+
+```java
+MethodHandles.lookup()
+    .findStatic(Top.class, "test", MethodType.methodType(void.class, String.class, String.class))
+    .invokeExact("arg", "a", "b", "c");
+// Exception in thread "main" java.lang.invoke.WrongMethodTypeException: expected (String,String[])void but found (String,String,String,String)void
+```
+
+## 用 `invokeWithArguments` 呢？
+
+`invokeWithArguments` 也会出现同样的问题，但与 `invokeExact` 相反
+
+```java
+MethodHandles.lookup()
+    .findStatic(Top.class, "test", MethodType.methodType(void.class, String.class, String[].class))
+    .invokeWithArguments("arg", new String[]{"a", "b", "c"});
+// Exception in thread "main" java.lang.ClassCastException: Cannot cast [Ljava.lang.String; to java.lang.String
+```
+
+反而是这个可以正常运行
+
+```java
+MethodHandles.lookup()
+    .findStatic(Top.class, "test", MethodType.methodType(void.class, String.class, String.class))
+    .invokeWithArguments("arg", "a", "b", "c");
+```

@@ -1,0 +1,25 @@
+---
+import type { Post } from '../utils/posts.ts';
+import { formatDate, isoDate } from '../utils/date.ts';
+
+interface Props {
+  posts: Post[];
+}
+
+const { posts } = Astro.props;
+---
+
+<ul class="post-list">
+  {
+    posts.map((post) => (
+      <li>
+        <a class="post-link" href={`/posts/${post.id}/`}>
+          <span class="post-title">{post.data.title}</span>
+          <time datetime={isoDate(post.data.date)} class="post-date">
+            {formatDate(post.data.date)}
+          </time>
+        </a>
+      </li>
+    ))
+  }
+</ul>

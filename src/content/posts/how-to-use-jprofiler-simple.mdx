@@ -1,0 +1,72 @@
+---
+title: "如何使用 JProfiler 查找 CPU 热点"
+date: 2023-01-14
+tags: ["jprofiler"]
+---
+
+#### 1. 下载并安装 JProfiler
+
+- 打开 [JProfiler 官网](https://www.ej-technologies.com/download/jprofiler/files) 点击 `Setup Executable with JRE`
+
+![img-1](/posts/how-to-use-jprofiler-simple/img-1.webp)
+
+- 下载完成后运行下载的程序，点击 `下一步`
+
+![img-2](/posts/how-to-use-jprofiler-simple/img-2.webp)
+
+- 点击 `我接受协议` 后点击 `下一步`
+
+![img-3](/posts/how-to-use-jprofiler-simple/img-3.webp)
+
+- 点击 `下一步`
+
+![img-4](/posts/how-to-use-jprofiler-simple/img-4.webp)
+
+- 点击 `配置永久许可证` 后填写 `姓名` 和 `许可证密钥`，完成后点击 `下一步`
+
+![img-5](/posts/how-to-use-jprofiler-simple/img-5.webp)
+
+- 点击 `下一步`
+
+![img-6](/posts/how-to-use-jprofiler-simple/img-6.webp)
+
+- 安装完成，点击 `完成`
+
+![img-7](/posts/how-to-use-jprofiler-simple/img-7.webp)
+
+#### 2. 使用 JProfiler 挂载
+
+- 启动 Jprofiler，选择 `Attach到一个正在运行到JVM`
+
+![img-8](/posts/how-to-use-jprofiler-simple/img-8.webp)
+
+- 选择你服务端的进程后，点击 `开始`
+
+![img-9](/posts/how-to-use-jprofiler-simple/img-9.webp)
+
+- 选择 `Sampling (Recommended)`
+
+![img-10](/posts/how-to-use-jprofiler-simple/img-10.webp)
+
+- 点击 `确定` 即可
+
+![img-11](/posts/how-to-use-jprofiler-simple/img-11.webp)
+
+#### A. 查内存泄漏
+
+- 点击 `堆遍历器`，选择 `生成一个JProfiler堆快照`，点击 `确定`  
+  警告：此过程将会使服务器停止响应，时间取决于硬盘
+
+![img-12](/posts/how-to-use-jprofiler-simple/img-12.webp)
+
+- 选择 `最大对象` 后即可，根据信息判断
+
+![img-13](/posts/how-to-use-jprofiler-simple/img-13.webp)
+
+#### B. 查CPU高占用
+
+- 选择 `CPU视图` 后点击 `记录CPU数据`，即可分析占用
+
+![img-14](/posts/how-to-use-jprofiler-simple/img-14.webp)
+
+![img-15](/posts/how-to-use-jprofiler-simple/img-15.webp)

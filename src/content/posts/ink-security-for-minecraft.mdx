@@ -1,0 +1,50 @@
+---
+title: "教程：在 Minecraft 服务端中安装 InkSecurity"
+date: 2023-01-01
+tags: ["ink-security"]
+---
+
+## `InkSecurity` JVM 字节码安全性增强框架
+
+#### 1.下载 `ink-security.jar` 最新版本
+
+- 打开 [下载地址](https://repo.inker.bot/service/rest/repository/browse/blobs/InkSecurity/) 下载最新版本的 ink-security， 文件名形如 `[Ink Security-28]ink-security-f787c65.jar`
+
+![img-1](/posts/ink-security-for-minecraft/img-1.webp) ![img-2](/posts/ink-security-for-minecraft/img-2.webp)
+
+- 将下载的文件复制到一个新的目录
+
+![img-3](/posts/ink-security-for-minecraft/img-3.webp)
+
+#### 2.生成名称随机的jar
+
+- 使用 `java -jar` 运行下载的文件，会在目录生成一个名称随机的jar
+
+![img-4](/posts/ink-security-for-minecraft/img-4.webp)
+
+#### 3.修改启动参数
+
+- 在服务端启动参数中，java 后方添加 javaagent 参数，添加后的启动参数形如 `java -javaagent:/home/inkerbot/ink-security/C4nObW2N0YMqYAbR51.jar -xxxxxx`
+
+![img-5](/posts/ink-security-for-minecraft/img-5.webp)
+
+#### 4.启动 Minecraft 服务器
+
+- 启动 Minecraft 服务器，ink-security 会在服务器启动前加载 ![img-6](/posts/ink-security-for-minecraft/img-6.webp)
+
+#### 5.添加插件
+
+- 将你需要的插件复制到 ink-security 的 `plugins` 文件夹中 ![img-7](/posts/ink-security-for-minecraft/img-7.webp)
+
+#### 6.重启 Minecraft 服务器
+
+- 重启 Minecraft 服务器，可以观察到 `ink-security` 插件被加载 ![img-8](/posts/ink-security-for-minecraft/img-8.webp)
+
+### 联系我们
+
+- 电子邮箱: [im@inker.bot](mailto:im@inker.bot)
+- QQ群：[477675479](https://jq.qq.com/?_wv=1027&k=2qjc3HEs)
+
+### 项目地址
+
+[https://git.inker.bot/ink-security/ink-security](https://git.inker.bot/ink-security/ink-security)

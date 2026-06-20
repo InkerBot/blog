@@ -1,0 +1,69 @@
+---
+title: "尝试使用 armeria 来构建rpc服务"
+date: 2024-01-20
+description: "时隔一年，某人想起了他那芬兰的服务器，于是开始了新一年的整活。"
+tags: ["star-sky", "armeria"]
+---
+
+时隔一年，某人想起了他那芬兰的服务器，于是开始了新一年的整活。
+
+## 1 新建项目
+
+首先来到了 [https://armeria.dev/docs/setup#setting-up-with-a-build-system](https://armeria.dev/docs/setup#setting-up-with-a-build-system)，选择 `gradle kotlin`
+
+```kotlin
+plugins {
+    kotlin("jvm") version "1.9.21"
+    idea
+}
+
+allprojects {
+    apply(plugin = "org.jetbrains.kotlin.jvm")
+    apply(plugin = "idea")
+
+    group = "org.inksnow"
+    version = "1.0-SNAPSHOT"
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testImplementation("org.jetbrains.kotlin:kotlin-test")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+    }
+}
+
+dependencies {
+    api(platform("com.linecorp.armeria:armeria-bom:1.26.4"))
+
+    api("com.linecorp.armeria:armeria")
+    api("com.linecorp.armeria:armeria-grpc")
+    api("com.linecorp.armeria:armeria-kotlin")
+
+    // Logging
+    implementation("ch.qos.logback:logback-classic:1.4.14")
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("-parameters")
+}
+```
+
+## 2 创建逻辑
+
+好像好像…这就是一个 route 带上 rpc 的实现…emmm
+
+突然不知道怎么写了，先放着吧

@@ -1,0 +1,15 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostList from '../components/PostList.astro';
+import { getSortedPosts } from '../utils/posts.ts';
+
+const posts = (await getSortedPosts()).slice(0, 8);
+---
+
+<BaseLayout>
+  <p class="section-label">最近的文章</p>
+  <PostList posts={posts} />
+  <p style="margin-top:2rem">
+    <a href="/posts/">查看全部 →</a>
+  </p>
+</BaseLayout>
